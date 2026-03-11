@@ -163,6 +163,30 @@ body{background:var(--bg);font-family:var(--bd);color:var(--w);min-height:100vh;
 .errbanner.show{display:block}
 .errbanner strong{display:block;font-family:var(--mo);font-size:10px;letter-spacing:2px;color:var(--r);margin-bottom:5px}
 
+/* ═══ CHAINLINK ORACLE PANEL ═══ */
+.clpanel{background:var(--card);border:1px solid rgba(55,91,255,.25);border-radius:14px;padding:14px 15px;margin-bottom:11px;position:relative;overflow:hidden}
+.clpanel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#375bff,#6B8CFF,transparent)}
+.cltop{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cltitle{display:flex;align-items:center;gap:7px}
+.cllogo{width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#375bff,#6B8CFF);display:flex;align-items:center;justify-content:center;font-size:9px;color:white;font-weight:700;flex-shrink:0}
+.cllabel{font-family:var(--mo);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#6B8CFF}
+.clage{font-family:var(--mo);font-size:10px;color:var(--mu)}
+.clage.fresh{color:var(--g)}.clage.stale{color:var(--a)}.clage.old{color:var(--r)}
+.clrow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
+.clitem{background:var(--sur);border-radius:9px;padding:10px 12px;border:1px solid var(--b1)}
+.clilbl{font-family:var(--mo);font-size:10px;color:var(--mu);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase}
+.clival{font-family:var(--dp);font-size:22px;line-height:1}
+.clival.up{color:var(--g)}.clival.dn{color:var(--r)}.clival.ne{color:var(--a)}.clival.di{color:var(--mu)}
+.clisub{font-family:var(--mo);font-size:11px;color:var(--mu);margin-top:3px}
+/* Gap indicator — shows diff between Chainlink and live price */
+.clgap{display:flex;align-items:center;justify-content:space-between;background:var(--sur);border-radius:9px;padding:9px 12px;border:1px solid var(--b1)}
+.clgaplbl{font-family:var(--mo);font-size:10px;color:var(--mu);letter-spacing:1px;text-transform:uppercase}
+.clgapval{font-family:var(--mo);font-size:13px}
+.clgapval.pos{color:var(--g)}.clgapval.neg{color:var(--r)}.clgapval.zero{color:var(--mu)}
+.clstatus{display:flex;align-items:center;gap:5px;margin-top:8px;font-family:var(--mo);font-size:10px;color:var(--mu)}
+.cldot{width:5px;height:5px;border-radius:50%;background:var(--mu);flex-shrink:0}
+.cldot.ok{background:#375bff;animation:bl 2s infinite}.cldot.warn{background:var(--a)}.cldot.err{background:var(--r)}
+
 /* FAB */
 .fab{position:fixed;bottom:18px;right:15px;z-index:100;width:46px;height:46px;border-radius:50%;background:var(--card);border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,.5)}
 .fab:active{transform:scale(.9)}
@@ -223,7 +247,7 @@ body{background:var(--bg);font-family:var(--bd);color:var(--w);min-height:100vh;
   <div class="cdown">
     <div class="ct">
       <div>
-        <div class="clbl">Next window opens</div>
+        <div class="clbl">Current window closes in</div>
         <div class="cnum" id="cnum">5:00</div>
       </div>
       <div class="cr">
@@ -232,7 +256,38 @@ body{background:var(--bg);font-family:var(--bd);color:var(--w);min-height:100vh;
       </div>
     </div>
     <div class="pt"><div class="pf" id="pf" style="width:0%"></div></div>
-    <div class="fires">Signal locks <em id="fires">—</em></div>
+    <div class="fires">🎯 Signal for next window fires <em id="fires">—</em></div>
+  </div>
+
+  <!-- CHAINLINK ORACLE -->
+  <div class="clpanel">
+    <div class="cltop">
+      <div class="cltitle">
+        <div class="cllogo">⬡</div>
+        <div class="cllabel">Chainlink Oracle · BTC/USD</div>
+      </div>
+      <span class="clage di" id="clage">fetching...</span>
+    </div>
+    <div class="clrow">
+      <div class="clitem">
+        <div class="clilbl">Oracle Price</div>
+        <div class="clival di" id="cl-price">—</div>
+        <div class="clisub" id="cl-pricesub">on-chain · mainnet</div>
+      </div>
+      <div class="clitem">
+        <div class="clilbl">Last Updated</div>
+        <div class="clival di" id="cl-age">—</div>
+        <div class="clisub">seconds ago</div>
+      </div>
+    </div>
+    <div class="clgap">
+      <span class="clgaplbl">Gap vs Live Price</span>
+      <span class="clgapval zero" id="cl-gap">—</span>
+    </div>
+    <div class="clstatus">
+      <div class="cldot" id="cldot"></div>
+      <span id="clstatus">Connecting to Ethereum mainnet...</span>
+    </div>
   </div>
 
   <!-- STRUCTURE -->
@@ -692,16 +747,22 @@ function renderFlow(){renderFlowBars(50,50);}  // placeholder, gets updated by c
 // ═══════════════════════════════════════════════════════
 function lockSignal(){
   if(!S.price||S.c1m.length<4){
-    // Not enough data — make best guess from price history
     S.signal={dir:'wait',reasons:[{t:'Not enough candle data yet — reload if this persists',v:'—',s:'neu'}],conv:0,locked:false};
     renderSignal(false);
     return;
   }
   const result=computeSignal();
   S.signal={...result,locked:true};
-  S.presigFired=true;
+  S.presigFired=true;  // prevent re-firing this window
   renderSignal(true);
   if(S.soundOn){sfxLock();setTimeout(()=>{result.dir==='up'?sfxUp():sfxDown();},280);}
+}
+
+// Reset presigFired when a new window fully opens so next T-10 fires fresh
+function resetForNextWindow(){
+  S.presigFired=false;
+  S.signal={dir:'wait',reasons:[],conv:0,locked:false};
+  renderSignal(false);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -727,7 +788,7 @@ function tick(){
   document.getElementById('fires').textContent=fi>0?`in ${fi}s`:'🔒 LOCKED';
 
   if(!S.signal.locked&&S.price){
-    document.getElementById('chip').textContent=fi>0?`SIGNAL IN ${fi}s`:'COMPUTING...';
+    document.getElementById('chip').textContent=fi>0?`NEXT SIGNAL IN ${fi}s`:'COMPUTING...';
   }
 
   if(S.lastFetch){
@@ -735,21 +796,25 @@ function tick(){
     document.getElementById('sage').textContent=`${age}s ago`;
   }
 
-  // NEW WINDOW
+  // T-10: FIRE SIGNAL before current window ends (= before NEXT window opens)
+  // This means: when sec <= 10, we are 10s away from a new window starting.
+  // The signal is for the NEXT window, displayed NOW so you can bet in time.
+  if(!S.presigFired&&sec<=10&&S.price){
+    lockSignal();
+  }
+
+  // NEW WINDOW OPENED — settle the previous signal, reset for next
   if(start!==S.windowKey){
     if(S.windowKey!==null)settleWindow();
     S.windowKey=start; S.windowNum++;
     S.lastCandle={...S.wCandle};
     S.wCandle={o:S.price,h:S.price,l:S.price,c:S.price,v:0};
-    S.presigFired=false;
-    S.signal={dir:'wait',reasons:[],conv:0,locked:false};
-    renderLastCandle(); renderSignal(false);
+    renderLastCandle();
     document.getElementById('wn').textContent=`W${S.windowNum}`;
-    fetchAll(); // get fresh candles
+    fetchAll(); // refresh candles for next signal computation
+    // Reset signal after 20s into new window so it's clear before T-10 fires again
+    setTimeout(resetForNextWindow, 20000);
   }
-
-  // T-10: FIRE
-  if(!S.presigFired&&sec<=10&&S.price)lockSignal();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -870,11 +935,153 @@ function sfxLock(){tone(880,.05,'square',.12);setTimeout(()=>tone(880,.05,'squar
 function toggleSound(){S.soundOn=!S.soundOn;if(S.soundOn){try{getCtx();}catch(e){};tone(440,.08);}document.getElementById('fab').textContent=S.soundOn?'🔔':'🔕';document.getElementById('fab').className='fab'+(S.soundOn?' on':'');}
 
 // ═══════════════════════════════════════════════════════
+//  CHAINLINK ORACLE — direct eth_call to mainnet contract
+//  Contract: 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c
+//  Function: latestRoundData() → (roundId,answer,startedAt,updatedAt,answeredInRound)
+//  Decimals: 8  →  divide answer by 1e8
+// ═══════════════════════════════════════════════════════
+
+const CL = {
+  CONTRACT: '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c',
+  // latestRoundData() function selector
+  SELECTOR: '0xfeaf968c',
+  // Public RPC endpoints — tried in order
+  RPCS: [
+    'https://ethereum-rpc.publicnode.com',
+    'https://rpc.ankr.com/eth',
+    'https://eth.llamarpc.com',
+    'https://cloudflare-eth.com',
+  ],
+  rpcIdx: 0,
+  price: null,
+  updatedAt: null,
+  lastFetch: null,
+  ok: false,
+};
+
+// Decode latestRoundData ABI response
+// Returns 5 x uint256 (each 32 bytes = 64 hex chars), no offset/length prefix
+function decodeLatestRoundData(hex) {
+  // strip 0x
+  const data = hex.startsWith('0x') ? hex.slice(2) : hex;
+  // each value is 64 hex chars (32 bytes)
+  const roundId    = BigInt('0x' + data.slice(0,   64));
+  const answer     = BigInt('0x' + data.slice(64,  128));
+  const startedAt  = BigInt('0x' + data.slice(128, 192));
+  const updatedAt  = BigInt('0x' + data.slice(192, 256));
+  // answeredInRound = data.slice(256, 320) — not needed
+  return { roundId, answer, startedAt, updatedAt };
+}
+
+async function fetchChainlink() {
+  const rpcUrls = CL.RPCS;
+  const order = [CL.rpcIdx, ...rpcUrls.map((_,i)=>i).filter(i=>i!==CL.rpcIdx)];
+
+  for (const idx of order) {
+    try {
+      const res = await fetch(rpcUrls[idx], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_call',
+          params: [{ to: CL.CONTRACT, data: CL.SELECTOR }, 'latest'],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+      const json = await res.json();
+      if (!json.result || json.result === '0x') throw new Error('empty result');
+
+      const { answer, updatedAt } = decodeLatestRoundData(json.result);
+      const price = Number(answer) / 1e8;
+      const updatedSec = Number(updatedAt);
+
+      if (!price || price < 1000) throw new Error('bad price: ' + price);
+
+      CL.price = price;
+      CL.updatedAt = updatedSec;
+      CL.lastFetch = Date.now();
+      CL.ok = true;
+      CL.rpcIdx = idx;
+      renderChainlink();
+      return;
+    } catch(e) {
+      // try next RPC
+    }
+  }
+
+  // All RPCs failed
+  CL.ok = false;
+  renderChainlink();
+}
+
+function renderChainlink() {
+  const dot = document.getElementById('cldot');
+  const status = document.getElementById('clstatus');
+
+  if (!CL.ok || !CL.price) {
+    dot.className = 'cldot err';
+    status.textContent = 'Cannot reach Ethereum RPC — check network';
+    document.getElementById('clage').textContent = 'offline';
+    document.getElementById('clage').className = 'clage old';
+    return;
+  }
+
+  // Oracle price
+  const priceEl = document.getElementById('cl-price');
+  priceEl.textContent = '$' + CL.price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  priceEl.className = 'clival di'; // oracle price is just data, no up/down color
+
+  // Age of oracle update
+  const ageSec = Math.floor(Date.now()/1000 - CL.updatedAt);
+  const ageEl = document.getElementById('cl-age');
+  ageEl.textContent = ageSec < 60 ? ageSec + 's' : Math.floor(ageSec/60) + 'm ' + (ageSec%60) + 's';
+  ageEl.className = 'clival ' + (ageSec < 60 ? 'up' : ageSec < 300 ? 'ne' : 'dn');
+
+  // Age label
+  const clageEl = document.getElementById('clage');
+  clageEl.textContent = 'updated ' + ageSec + 's ago';
+  clageEl.className = 'clage ' + (ageSec < 60 ? 'fresh' : ageSec < 300 ? 'stale' : 'old');
+
+  // Gap vs live price
+  const gapEl = document.getElementById('cl-gap');
+  if (S.price && CL.price) {
+    const gap = S.price - CL.price;
+    const gapPct = (gap / CL.price * 100);
+    gapEl.textContent = (gap >= 0 ? '+$' : '-$') + Math.abs(gap).toFixed(2) + ' (' + (gap >= 0 ? '+' : '') + gapPct.toFixed(3) + '%)';
+    gapEl.className = 'clgapval ' + (Math.abs(gapPct) < 0.1 ? 'zero' : gap > 0 ? 'pos' : 'neg');
+
+    // If gap is large, add warning to status
+    if (Math.abs(gapPct) > 0.5) {
+      dot.className = 'cldot warn';
+      status.textContent = '⚠ Oracle is ' + Math.abs(gapPct).toFixed(2) + '% behind live — may be stale';
+    } else {
+      dot.className = 'cldot ok';
+      status.textContent = 'Live · Ethereum mainnet · ' + CL.RPCS[CL.rpcIdx].replace('https://','');
+    }
+  } else {
+    gapEl.textContent = '—';
+    gapEl.className = 'clgapval zero';
+    dot.className = 'cldot ok';
+    status.textContent = 'Live · Ethereum mainnet · ' + CL.RPCS[CL.rpcIdx].replace('https://','');
+  }
+}
+
+// Keep oracle age display live (ticks every second even without new fetch)
+function tickChainlink() {
+  if (CL.ok && CL.price) renderChainlink();
+}
+
+// ═══════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════
 fetchAll();
+fetchChainlink();
 setInterval(fetchPriceOnly, 3000);
 setInterval(fetchAll, 25000);
+setInterval(fetchChainlink, 30000);  // Chainlink updates every ~1min on mainnet
+setInterval(tickChainlink, 5000);    // refresh age display every 5s
 setInterval(tick, 1000);
 tick();
 </script>
